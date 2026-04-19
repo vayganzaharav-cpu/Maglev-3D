@@ -1,4 +1,5 @@
-# --- ОБНОВЛЕННЫЙ HTML + THREE.JS КОД (ВСТАВИТЬ В PYTHON) ---
+import streamlit as st
+import streamlit.components.v1 as components
 html_code = f"""
 <!DOCTYPE html>
 <html>
