@@ -1,217 +1,200 @@
-import streamlit as st
-import numpy as np
-import streamlit.components.v1 as components
-
-# Настройка страницы на всю ширину
-st.set_page_config(page_title="Maglev PRO Simulator", layout="wide", initial_sidebar_state="expanded")
-
-st.markdown("<h1 style='text-align: center; color: #00ffcc;'>🚄 Инженерный 3D-симулятор Маглева</h1>", unsafe_allow_html=True)
-st.markdown("---")
-
-# Панель управления (Слева)
-with st.sidebar:
-    st.header("🎛️ Панель управления")
-    mass = st.slider("Масса поезда (кг)", 10, 500, 150, help="Влияет на силу тяжести")
-    magnet_power = st.slider("Мощность магнитов (M)", 10, 150, 80, help="Определяет выталкивающую силу")
-    speed = st.slider("Скорость (км/ч)", 0, 600, 300, help="Анимация движения")
-    
-    st.markdown("### Расчет в реальном времени")
-    st.latex(r"d = \sqrt{\frac{k \cdot M}{m \cdot g}}")
-    
-# Физическое ядро (упрощенный расчет для визуализации)
-k_calib = 5000
-g = 9.8
-force_gravity = mass * g
-# Защита от деления на ноль и расчет зазора (d)
-levitation_gap = np.sqrt((k_calib * magnet_power) / (force_gravity + 0.1))
-
-# Ограничиваем высоту для красивой картинки (от 1 до 15 мм)
-viz_height = max(0.5, min(15.0, levitation_gap))
-
-# Цветовая индикация состояния
-if viz_height < 2.0:
-    status_color = "#ff3333" # Красный (Опасность)
-    status_text = "КРИТИЧЕСКИЙ ЗАЗОР! РИСК ТРЕНИЯ"
-else:
-    status_color = "#00ffcc" # Зеленый (Норма)
-    status_text = "СИСТЕМА СТАБИЛЬНА"
-
-# 3D Движок (Three.js) внедренный в HTML
-# Используем надежный CDN и добавляем тени, сетку и группировку объектов
+# --- ОБНОВЛЕННЫЙ HTML + THREE.JS КОД (ВСТАВИТЬ В PYTHON) ---
 html_code = f"""
 <!DOCTYPE html>
 <html>
 <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
-        body {{ margin: 0; overflow: hidden; background-color: #0d1117; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }}
+        body {{ margin: 0; overflow: hidden; background-color: #0d1117; font-family: sans-serif; }}
         canvas {{ display: block; }}
         #hud {{
             position: absolute; top: 15px; left: 15px;
             background: rgba(13, 17, 23, 0.85); border: 1px solid {status_color};
-            padding: 15px; border-radius: 8px; color: white; box-shadow: 0 0 15px {status_color}40;
+            padding: 15px; border-radius: 8px; color: white;
+            pointer-events: none; z-index: 100;
         }}
-        .value {{ color: {status_color}; font-weight: bold; font-size: 1.2em; }}
+        .value {{ color: {status_color}; font-weight: bold; font-size: 1.1em; }}
     </style>
 </head>
 <body>
     <div id="hud">
-        <div style="font-size: 0.9em; color: #888;">СТАТУС: {status_text}</div>
-        <hr style="border-color: #333;">
-        Зазор левитации: <span class="value">{viz_height:.2f} мм</span><br>
-        Масса вагона: <span class="value">{mass} кг</span><br>
+        <div style="font-size: 0.8em; color: #888;">СТАТУС: {status_text}</div>
+        Зазор: <span class="value">{viz_height:.2f} мм</span><br>
         Скорость: <span class="value">{speed} км/ч</span>
     </div>
 
     <script>
-        // Инициализация сцены
+        // --- БАЗОВАЯ НАСТРОЙКА ---
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x0d1117, 0.015); // Профессиональный туман вдалеке
+        scene.fog = new THREE.FogExp2(0x0d1117, 0.01); // Туман для бесконечной трассы
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(15, 10, 20);
-        camera.lookAt(0, 2, 0);
+        camera.position.set(15, 8, 20); // Начальная позиция камеры
 
         const renderer = new THREE.WebGLRenderer({{ antialias: true }});
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true; // Включаем тени
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.shadowMap.enabled = true; // Тени
         document.body.appendChild(renderer.domElement);
 
-        // Освещение
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-        scene.add(ambientLight);
+        // --- ДОБАВЛЯЕМ ВРАЩЕНИЕ КАМЕРЫ (OrbitControls) ---
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; // Плавное замедление при вращении
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 5;      // Минимальное приближение
+        controls.maxDistance = 100;    // Максимальное отдаление
+        controls.target.set(0, 2, 0);  // Камера смотрит на поезд
 
-        const spotLight = new THREE.SpotLight(0xffffff, 1.5);
-        spotLight.position.set(10, 30, 10);
-        spotLight.castShadow = true;
-        spotLight.shadow.mapSize.width = 2048;
-        spotLight.shadow.mapSize.height = 2048;
-        scene.add(spotLight);
+        // --- ОСВЕЩЕНИЕ ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const sun = new THREE.DirectionalLight(0xffffff, 1);
+        sun.position.set(10, 20, 10);
+        sun.castShadow = true;
+        scene.add(sun);
 
-        const blueLight = new THREE.PointLight(0x00ffcc, 1, 50);
-        blueLight.position.set(0, 5, 0);
-        scene.add(blueLight);
-
-        // Инженерная сетка координат
-        const gridHelper = new THREE.GridHelper(200, 100, 0x00ffcc, 0x444444);
-        gridHelper.position.y = -2;
-        gridHelper.material.opacity = 0.2;
-        gridHelper.material.transparent = true;
-        scene.add(gridHelper);
-
-        // --- СОЗДАНИЕ ПУТИ (Монорельс) ---
+        // --- СОЗДАНИЕ БЕСКОНЕЧНОЙ ТРАССЫ (ЭСТАКАДЫ) ---
         const trackGroup = new THREE.Group();
         
-        // Главная балка
-        const railGeo = new THREE.BoxGeometry(200, 2, 4);
-        const railMat = new THREE.MeshStandardMaterial({{ color: 0x555555, roughness: 0.6 }});
-        const rail = new THREE.Mesh(railGeo, railMat);
-        rail.receiveShadow = true;
-        trackGroup.add(rail);
+        // Материалы трассы
+        const concreteMat = new THREE.MeshStandardMaterial({{ color: 0x444444, roughness: 0.9 }});
+        const railMat = new THREE.MeshStandardMaterial({{ color: 0x111111, metalness: 0.8 }});
 
-        // Боковые магниты на рельсе (полосы)
-        const magStripGeo = new THREE.BoxGeometry(200, 0.5, 0.5);
-        const magStripMat = new THREE.MeshStandardMaterial({{ color: 0x222222, emissive: 0x111111 }});
-        const strip1 = new THREE.Mesh(magStripGeo, magStripMat);
-        strip1.position.set(0, 1, 1.8);
-        const strip2 = new THREE.Mesh(magStripGeo, magStripMat);
-        strip2.position.set(0, 1, -1.8);
-        trackGroup.add(strip1);
-        trackGroup.add(strip2);
+        // Создаем сегмент трассы (который будем клонировать)
+        function createTrackSegment(xOffset) {{
+            const segment = new THREE.Group();
+            
+            // Основная бетонная балка
+            const beamGeo = new THREE.BoxGeometry(20, 1.5, 4);
+            const beam = new THREE.Mesh(beamGeo, concreteMat);
+            beam.receiveShadow = true;
+            segment.add(beam);
 
+            // Магнитные рельсы (полосы)
+            const railGeo = new THREE.BoxGeometry(20, 0.3, 0.6);
+            const rail1 = new THREE.Mesh(railGeo, railMat);
+            rail1.position.set(0, 0.9, 1.7);
+            const rail2 = rail1.clone();
+            rail2.position.set(0, 0.9, -1.7);
+            segment.add(rail1);
+            segment.add(rail2);
+
+            // Опора эстакады (столб)
+            const pillarGeo = new THREE.CylinderGeometry(1, 1.5, 15, 6);
+            const pillar = new THREE.Mesh(pillarGeo, concreteMat);
+            pillar.position.set(0, -8, 0);
+            pillar.receiveShadow = true;
+            segment.add(pillar);
+
+            segment.position.x = xOffset;
+            return segment;
+        }}
+
+        // Генерируем 10 сегментов вперед и назад
+        for (let i = -5; i < 15; i++) {{
+            trackGroup.add(createTrackSegment(i * 20));
+        }}
         scene.add(trackGroup);
 
-        // --- СОЗДАНИЕ ОДИНОЧНОГО ПОЕЗДА ---
+        // --- СОЗДАНИЕ ОБТЕКАЕМОГО ПОЕЗДА (PRO ВИД) ---
         const trainGroup = new THREE.Group();
+        
+        // Материал корпуса (металл с отсветом)
+        const bodyMat = new THREE.MeshStandardMaterial({{ 
+            color: 0xffffff, 
+            metalness: 0.9, 
+            roughness: 0.1,
+            emissive: 0x111111
+        }});
 
-        // Главный корпус
-        const bodyGeo = new THREE.BoxGeometry(12, 3, 5);
-        const bodyMat = new THREE.MeshStandardMaterial({{ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 }});
+        // 1. Главный цилиндрический корпус
+        const bodyGeo = new THREE.CylinderGeometry(1.8, 1.8, 12, 32);
+        bodyGeo.rotateZ(Math.PI / 2); // Кладем цилиндр на бок
         const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.position.y = 1.5;
+        body.position.y = 1.8;
         body.castShadow = true;
         trainGroup.add(body);
 
-        // Кабина (стекло)
-        const glassGeo = new THREE.BoxGeometry(3, 1.5, 4.5);
-        const glassMat = new THREE.MeshStandardMaterial({{ color: 0x000000, metalness: 0.9, roughness: 0.1 }});
+        // 2. Обтекаемый нос (Капсула)
+        const noseGeo = new THREE.CapsuleGeometry(1.8, 3, 16, 32);
+        noseGeo.rotateZ(Math.PI / 2);
+        const nose = new THREE.Mesh(noseGeo, bodyMat);
+        nose.position.set(6, 1.8, 0); // Ставим впереди корпуса
+        nose.castShadow = true;
+        trainGroup.add(nose);
+
+        // 3. Кабина водителя (темное стекло)
+        const glassMat = new THREE.MeshStandardMaterial({{ color: 0x010101, metalness: 1, roughness: 0 }});
+        const glassGeo = new THREE.CapsuleGeometry(1.2, 2, 8, 16);
+        glassGeo.rotateZ(Math.PI / 2);
         const glass = new THREE.Mesh(glassGeo, glassMat);
-        glass.position.set(4.6, 2.2, 0);
+        glass.position.set(6.5, 2.2, 0); // На носу
         trainGroup.add(glass);
 
-        // Магнитные захваты (лапки, обхватывающие рельс)
-        const podGeo = new THREE.BoxGeometry(10, 1.5, 1);
-        const podMat = new THREE.MeshStandardMaterial({{ color: 0x333333 }});
-        const podLeft = new THREE.Mesh(podGeo, podMat);
-        podLeft.position.set(0, 0.5, 2.5);
-        podLeft.castShadow = true;
-        const podRight = new THREE.Mesh(podGeo, podMat);
-        podRight.position.set(0, 0.5, -2.5);
-        podRight.castShadow = true;
-        trainGroup.add(podLeft);
-        trainGroup.add(podRight);
+        // 4. Боковые обтекатели магнитов (юбка)
+        const skirtGeo = new THREE.BoxGeometry(15, 1.2, 5.2);
+        const skirtMat = new THREE.MeshStandardMaterial({{ color: 0x222222 }});
+        const skirt = new THREE.Mesh(skirtGeo, skirtMat);
+        skirt.position.set(1, 0.6, 0);
+        trainGroup.add(skirt);
 
-        // Нижние магниты (светящиеся)
-        const hoverLightGeo = new THREE.PlaneGeometry(8, 3);
-        const hoverLightMat = new THREE.MeshBasicMaterial({{ color: '{status_color}', side: THREE.DoubleSide }});
-        const hoverLight = new THREE.Mesh(hoverLightGeo, hoverLightMat);
-        hoverLight.rotation.x = Math.PI / 2;
-        hoverLight.position.y = -0.1;
-        trainGroup.add(hoverLight);
+        // 5. Нижнее свечение левитации
+        const lightGeo = new THREE.PlaneGeometry(12, 4);
+        const lightMat = new THREE.MeshBasicMaterial({{ color: '{status_color}', transparent: true, opacity: 0.7 }});
+        const lightPlane = new THREE.Mesh(lightGeo, lightMat);
+        lightPlane.rotation.x = -Math.PI / 2;
+        lightPlane.position.y = -0.1;
+        trainGroup.add(lightPlane);
 
         scene.add(trainGroup);
 
-        // Анимация
-        let t = 0;
+        // --- АНИМАЦИЯ И ФИЗИКА ---
+        let clock = new THREE.Clock();
+
         function animate() {{
             requestAnimationFrame(animate);
+            let delta = clock.getDelta();
             
-            // Физика левитации (позиция Y)
-            // Добавляем микро-вибрации для реалистичности
-            const baseHeight = ({viz_height} * 0.3) + 1; 
-            const vibration = (Math.random() * 0.05 - 0.02) * ({mass}/500); 
-            trainGroup.position.y = baseHeight + vibration;
+            // Необходим для плавного damping в OrbitControls
+            controls.update(); 
+
+            // 1. Физика левитации (позиция Y)
+            const targetY = ({viz_height} * 0.2) + 0.5; // Масштабирование зазора
+            // Плавное изменение высоты (сглаживание)
+            trainGroup.position.y = THREE.MathUtils.lerp(trainGroup.position.y, targetY, 0.1);
             
-            // Иллюзия движения (двигаем рельс назад)
+            // 2. Иллюзия движения по трассе
             if ({speed} > 0) {{
-                t += {speed} * 0.002;
-                trackGroup.position.x = -(t % 20); // Зацикливаем движение пути
+                // Сдвигаем всю группу трассы назад
+                trackGroup.position.x -= {speed} * 0.005;
                 
-                // Легкий наклон поезда назад при разгоне (опционально)
-                trainGroup.rotation.z = Math.min({speed} * 0.0001, 0.05);
-            }} else {{
-                trainGroup.rotation.z = 0;
+                // Если сегмент ушел далеко назад, перекидываем его вперед (бесконечная петля)
+                trackGroup.children.forEach(segment => {{
+                    // Получаем мировую позицию сегмента
+                    let worldPos = new THREE.Vector3();
+                    segment.getWorldPosition(worldPos);
+                    
+                    if (worldPos.x < -40) {{
+                        segment.position.x += 20 * 20; // Перенос на 20 сегментов вперед
+                    }}
+                }});
             }}
             
-            // Пульсация света левитации
-            blueLight.intensity = 1 + Math.sin(Date.now() * 0.01) * 0.2;
-            blueLight.color.setHex(parseInt('{status_color}'.replace('#', '0x')));
-
+            // 3. Визуальные эффекты
+            // Изменяем цвет свечения в зависимости от статуса
+            lightPlane.material.color.setHex(parseInt('{status_color}'.replace('#', '0x')));
+            
             renderer.render(scene, camera);
         }}
         
+        animate();
+
         // Адаптация под размер окна
         window.addEventListener('resize', () => {{
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }});
-        
-        animate();
     </script>
 </body>
 </html>
 """
-
-# Вставка HTML блока на всю ширину
-components.html(html_code, height=700)
-
-st.markdown("### 📋 Анализ данных эксперимента")
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric(label="Действующая сила тяжести (F=mg)", value=f"{force_gravity:.1f} Н")
-with col2:
-    st.metric(label="Подъемная сила магнитов", value=f"{magnet_power * k_calib} у.е.")
-with col3:
-    st.metric(label="Расчетный зазор (d)", value=f"{levitation_gap:.2f} мм")
