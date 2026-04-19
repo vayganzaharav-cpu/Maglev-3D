@@ -1,40 +1,40 @@
-... import streamlit as st
-... import streamlit.components.v1 as components
-... 
-... # Настройка страницы
-... st.set_page_config(page_title="Maglev 3D Simulator", layout="wide")
-... 
-... st.title("🚀 3D Симулятор Маглева: Эксперимент №5")
-... st.markdown("---")
-... 
-... # Боковая панель управления
-... with st.sidebar:
-...     st.header("⚙️ Настройки эксперимента")
-...     mass = st.slider("Масса поезда (кг)", 10, 500, 100)
-...     magnet_power = st.slider("Мощность магнитов (M)", 10, 100, 50)
-...     speed = st.slider("Целевая скорость (км/ч)", 0, 600, 250)
-...     
-...     st.info("""
-...     **Физика процесса:**
-...     Высота левитации рассчитывается в реальном времени. 
-...     Если масса слишком велика, магнитная подушка 'просядет'.
-...     """)
-... 
-... # Расчет высоты левитации для передачи в 3D (упрощенная модель)
-... # d = sqrt(k * M / F), где F = mass * g
-... k = 5000 
-... g = 9.8
-... required_force = mass * g
-... levitation_height = ( (k * magnet_power) / (required_force + 1) )**0.5
-... # Ограничиваем высоту для визуализации (от 2 до 40 единиц)
-... viz_height = max(2, min(40, levitation_height))
-... 
-... # HTML + Three.js Код
-... three_js_code = f"""
-... <!DOCTYPE html>
-... <html>
-... <head>
-...     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+import streamlit as st
+import streamlit.components.v1 as components
+
+# Настройка страницы
+st.set_page_config(page_title="Maglev 3D Simulator", layout="wide")
+
+st.title("🚀 3D Симулятор Маглева: Эксперимент №5")
+st.markdown("---")
+
+# Боковая панель управления
+with st.sidebar:
+    st.header("⚙️ Настройки эксперимента")
+    mass = st.slider("Масса поезда (кг)", 10, 500, 100)
+    magnet_power = st.slider("Мощность магнитов (M)", 10, 100, 50)
+    speed = st.slider("Целевая скорость (км/ч)", 0, 600, 250)
+    
+    st.info("""
+    **Физика процесса:**
+    Высота левитации рассчитывается в реальном времени. 
+    Если масса слишком велика, магнитная подушка 'просядет'.
+    """)
+
+# Расчет высоты левитации для передачи в 3D (упрощенная модель)
+# d = sqrt(k * M / F), где F = mass * g
+k = 5000 
+g = 9.8
+required_force = mass * g
+levitation_height = ( (k * magnet_power) / (required_force + 1) )**0.5
+# Ограничиваем высоту для визуализации (от 2 до 40 единиц)
+viz_height = max(2, min(40, levitation_height))
+
+# HTML + Three.js Код
+three_js_code = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {{ margin: 0; overflow: hidden; background-color: #0e1117; }}
         canvas {{ width: 100%; height: 100% }}
@@ -125,3 +125,4 @@ with col1:
 
 with col2:
     st.latex(r"d \approx \sqrt{\frac{k \cdot M}{m \cdot g}}")
+    st.write(f"Текущий расчетный зазор: **{levitation_height:.2f} мм**")
