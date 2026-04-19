@@ -1,50 +1,162 @@
 import streamlit as st
-import numpy as np
-from PIL import Image
-from io import BytesIO
+import streamlit.components.v1 as components
 
-# --- 1. Product Quality & Substance ---
+# Настройка страницы
+st.set_page_config(page_title="Maglev Pro Simulator", layout="wide")
 
-# Standard page config to remove filler and lead with substantive content
-st.set_page_config(page_title="Maglev Dynamic Stability Simulator", layout="wide", initial_sidebar_state="expanded")
+# Заголовок
+st.markdown("<h1 style='text-align: center; color: #00ffcc;'>🚄 Инженерный 3D-симулятор Маглева</h1>", unsafe_allow_html=True)
 
-# 1. Substance > Generalities: Specific facts beat vague claims. SOUND LIKE A HELPFUL FRIEND.
-st.markdown("<h1 style='text-align: center; color: #00ffcc;'>🚄 Maglev Engineering Simulator</h1>", unsafe_allow_html=True)
+# Боковая панель управления
+st.sidebar.header("🕹️ Настройки эксперимента")
+mass = st.sidebar.slider("Масса поезда (кг)", 200, 1000, 450)
+power = st.sidebar.slider("Мощность магнитов (кВт)", 50, 300, 180)
+speed = st.sidebar.slider("Целевая скорость (км/ч)", 0, 600, 350)
+
+# Физический расчет зазора (d)
+# Используем упрощенную формулу для демонстрации стабильности
+levitation_gap = (power / (mass * 0.098)) * 0.5
+viz_height = max(0.5, min(15.0, levitation_gap))
+
+# Цветовая индикация состояния
+if viz_height < 3.0:
+    status_color = "#ff3333" # Красный (Опасно)
+    status_text = "ВНИМАНИЕ: КРИТИЧЕСКИЙ ЗАЗОР"
+else:
+    status_color = "#00ffcc" # Бирюзовый (Стабильно)
+    status_text = "СИСТЕМА СТАБИЛЬНА"
+
+# HTML + JavaScript (Three.js) блок
+html_code = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {{ margin: 0; background: #0d1117; overflow: hidden; }}
+        #ui-overlay {{
+            position: absolute; top: 20px; left: 20px;
+            color: white; font-family: 'Segoe UI', sans-serif;
+            background: rgba(13, 17, 23, 0.8); padding: 15px;
+            border-radius: 10px; border: 1px solid {status_color};
+            pointer-events: none;
+        }}
+    </style>
+</head>
+<body>
+    <div id="ui-overlay">
+        <div style="color: {status_color}; font-weight: bold;">{status_text}</div>
+        <div style="font-size: 24px; margin-top: 5px;">{viz_height:.2f} мм</div>
+        <div style="color: #888; font-size: 12px;">Высота левитации</div>
+    </div>
+
+    <script>
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0d1117, 0.012);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(15, 10, 25);
+
+        const renderer = new THREE.WebGLRenderer({{ antialias: true }});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Свет
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const spot = new THREE.SpotLight(0xffffff, 1.2);
+        spot.position.set(20, 40, 20);
+        spot.castShadow = true;
+        scene.add(spot);
+
+        // Трасса (Эстакада)
+        const trackGroup = new THREE.Group();
+        const createTrack = (x) => {{
+            const g = new THREE.Group();
+            const beam = new THREE.Mesh(
+                new THREE.BoxGeometry(20, 1, 5),
+                new THREE.MeshStandardMaterial({{ color: 0x222222 }})
+            );
+            beam.receiveShadow = true;
+            const pillar = new THREE.Mesh(
+                new THREE.CylinderGeometry(1, 1.5, 20),
+                new THREE.MeshStandardMaterial({{ color: 0x1a1a1a }})
+            );
+            pillar.position.y = -10.5;
+            g.add(beam, pillar);
+            g.position.x = x;
+            return g;
+        }};
+        
+        for(let i = -5; i < 15; i++) trackGroup.add(createTrack(i * 20));
+        scene.add(trackGroup);
+
+        // --- РЕАЛИСТИЧНЫЙ ПОЕЗД ---
+        const train = new THREE.Group();
+        const bodyMat = new THREE.MeshStandardMaterial({{ color: 0xffffff, metalness: 0.9, roughness: 0.1 }});
+        
+        // Обтекаемый корпус
+        const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.8, 12, 4, 32), bodyMat);
+        body.rotation.z = Math.PI / 2;
+        body.castShadow = true;
+        train.add(body);
+
+        // Кабина (Черное стекло)
+        const glass = new THREE.Mesh(
+            new THREE.CapsuleGeometry(1.3, 2, 4, 16),
+            new THREE.MeshStandardMaterial({{ color: 0x000000, metalness: 1 }})
+        );
+        glass.rotation.z = Math.PI / 2;
+        glass.position.set(6.5, 0.6, 0);
+        train.add(glass);
+
+        // Боковые магниты (светящиеся)
+        const glowMat = new THREE.MeshBasicMaterial({{ color: '{status_color}', transparent: true, opacity: 0.6 }});
+        const glow = new THREE.Mesh(new THREE.BoxGeometry(14, 0.2, 5.2), glowMat);
+        glow.position.y = -1.6;
+        train.add(glow);
+
+        scene.add(train);
+
+        function animate() {{
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Динамика
+            train.position.y = 1.8 + ({viz_height} * 0.1);
+            
+            if ({speed} > 0) {{
+                trackGroup.position.x -= {speed} * 0.002;
+                if (trackGroup.position.x < -20) trackGroup.position.x = 0;
+                train.rotation.x = Math.sin(Date.now() * 0.005) * 0.01; // Легкая качка
+            }}
+
+            renderer.render(scene, camera);
+        }}
+        animate();
+
+        window.addEventListener('resize', () => {{
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }});
+    </script>
+</body>
+</html>
+"""
+
+# Отображение 3D компонента
+components.html(html_code, height=700)
+
+# Текстовый блок анализа
 st.markdown("---")
+st.markdown("### 📊 Анализ динамической стабильности")
+st.info("Стабильность системы не является пассивной. Даже при точных параметрах внешние возмущения или задержки в управлении могут привести к заземлению или сходу с рельсов.")
 
-col1, col2, col3 = st.columns([1, 1, 1])
-with col1:
-    st.markdown("### 🔍 Real-Time Data")
-    # Lead with data over generalizations
-    # 3tips Example: specific Cardio 30-40% reduction, specific blue light range 450-490nm.
-
-with col2:
-    st.markdown("### 🛠️ Active Parameters")
-    # Structure for scanning: headers, bold terms, lists, tables.
-    mass = st.slider("Train Mass (kg)", 200, 800, 450, 10, help="Drives the gravitational pull.")
-    power = st.slider("Magnetic Power (kW)", 50, 250, 150, 5, help="Determines the strength of the levitation field.")
-    # Specificity > Generalities: WEAK vs STRONG exercise benefits examples.
-    curvature = st.slider("Track Curvature", 0.0, 0.01, 0.005, 0.0001, help="Simulates lateral stability challenge in turns.")
-
-with col3:
-    st.markdown("### 📊 Failure Analysis")
-    # blockquote for callouts / nuggets / warnings. Use horizontal rule for fresh focus.
-    st.markdown("---")
-    # blockquote callout:
-    > "Stability is not passive. Even with precise parameters, external disturbances or control delays can lead to grounding or derailment."
-    # right cold example "Factors are relevant" vs warmth "trip up almost everyone." concise warmup asides briefing nuance that shows care about the topic. Warm expert Nuggets breviloquent specific asides briefing nuance concise specific factual warm asides briefing nuance concise specific factual warm asides
-
-# --- 2. 3D Simulator (LlmGeneratedComponent) ---
-
-# threshold 1 & 2 pass:
-# 1. Interaction Necessity Test: Parameter adjustment (mass, power, curvature) creates DIFFERENCE OUTCOMES in failure (grounding/derailment). text explanations are weak, simulator is Strong specific factual briefing nuance. concisely warm expert specific factual concise warm expert specific factual nuggets concise specific factual warm asides briefing nuance concise specific factual briefing nuance nuggets specific concise warm asides briefing nuance nuggets specific concise warm asides briefing nuance nuggets specific concise warm asides briefing nuance nuggets specific concise warm asides briefing nuance nuggets specific concise warm asides briefing nuance nuggets specific concise warm asides briefing nuance nuggets
-# 2. Static Answer Challenge: Facts/tables cannot explain the multi-parameter, time-dependent, visual interaction for complex dynamical system stability. NO lazy linking, explain it.
-
-# archetype mapping: Archetype 1: The Simulator (Physics/Systems). Target Libs: Three.js for 3D visual. Contextual Integrity: populate with specific real educational data derived from internal knowledge: mass 200-800, power 50-250, curvature 0-0.01. initialize inputs contextually sound. Styling Delegation: NO color names fonts properties. Use generic language "highlight" "distinguish visually" never HOW (make active particle orange)
-
-# Frame component with `##` main header and subsection hierarchy for scannability. header hierarchy. vis flows zone breath fresh focus. vis flows visual structure compression tool frame visually substantive zone fresh focus frame vis struct compression tool major components sequence frame visibly zone fresh focus major components sequential Siblings ONLY. sequence sib. earning component upgrade deliberate upgrade NOT a template. sequential sib only.
-
-## Dynamic Stability Analysis Zone
-
-```json?chameleon
-{"component":"LlmGeneratedComponent","props":{"height":"800px","prompt":"1. Objective: Simulate a highly realistic and interactive 3D magnetic levitation (Maglev) train system to demonstrate dynamic stability and failure modes under varying parameters.\n2. Data State: Default mass=450kg, power=150kW, curvature=0.005.\n3. Strategy: Standard Layout (Sims).\n4. Inputs: Train Mass (slider, 200-800 kg), Magnetic Power (slider, 50-250 kW), Track Curvature (slider, 0-0.01).\n5. Behavior: Use Three.js (or similar) to create a detailed, modern Maglev train (e.g., bullet nose, passenger cabins with windows) on a realistic elevated track system. Show specific superconducting magnets on the train and guidance coils on the track walls. Visualize the lateral and levitation forces. Implement real-time physical interactions: as mass increases, show the levitation gap compressing; as power increases, show the train rising. Implement track curvature that generates significant lateral forces on the train. Create real-time physical stability analysis: if curvature exceeds lateral guidance, simulate derailment; if mass exceeds power, simulate grounding. Use modern, high-contrast visual styling with clear labels and smooth, data-driven animations to highlight forces and system status.","id":"im_f975823b2fbd5492"}}
+col1, col2 = st.columns(2)
+col1.metric("Текущий зазор", f"{viz_height:.2f} мм", delta=f"{viz_height - 5:.1f} мм")
+col2.metric("Подъемная сила", f"{power * 10} Н")
